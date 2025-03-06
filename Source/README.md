@@ -8,3 +8,5 @@
 # Dependencies
 * yandex_tracker_client
 * python-dateutil
+* pandas
+* openpyxl
