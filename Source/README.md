@@ -2,7 +2,7 @@
 * connect.ini with Yandex Tracker read access credentials:
 
         [DEFAULT]
-        token = tocken_credential_string
+        token = token_credential_string
         org = org_id_numbers
 
 # Dependencies
