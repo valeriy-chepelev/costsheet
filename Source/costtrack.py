@@ -21,9 +21,9 @@ def define_parser():
     return parser
 
 
-def spend(issue, person, date):
+def spend(issue, person, start, final):
     # TODO: calculate
-    return 8
+    return 1
 
 
 def login_match(login, user) -> bool:
@@ -75,7 +75,7 @@ def main():
                              header=None, index_col=None,
                              usecols=[0, 1], skiprows=1,
                              names=['name', 'request'])
-    print('Projects list:\n', projects)
+    print('\nProjects list:\n', projects)
 
     # reading persons data
 
@@ -87,6 +87,7 @@ def main():
 
     # lookup persons in Tracker
 
+    print()
     persons['accounts'] = ''
     with alive_bar(len(persons), title='Persons lookup', theme='classic') as bar:
         for index_pers, person in persons.iterrows():
@@ -98,21 +99,25 @@ def main():
 
     # acquiring data from Tracker
 
-    for index_prj, project in projects.iterrows():
-        issues = client.issues.find(query=project['request'])
-        print(f"Project '{project['name']}' contain {len(issues)} issue(s).")
-        """
-        for index_pers, person in persons.iterrows():
-            s = 0
-            for issue in issues:
-                 # TODO: summ spends
-
+    print()
+    report = pd.DataFrame(0,
+                          index=persons['name'].values.tolist(),
+                          columns=projects['name'].values.tolist())
+    with alive_bar(len(persons) * len(projects), title='Costs', theme='classic') as bar:
+        for _, project in projects.iterrows():
+            issues = client.issues.find(query=project['request'])
+            # print(f"Project '{project['name']}' contain {len(issues)} issue(s).")
+            for _, person in persons.iterrows():
+                s = sum(spend(issue, person, start_date, final_date) for issue in issues)
+                report.at[person['name'], project['name']] = s
+                bar()
+    print('Costs report:\n', report)
 
     # store the report
 
-    pass
-    
-    """
+    with pd.ExcelWriter(filename := f'costs-{date.strftime("%m-%y")}.xlsx') as writer:
+        report.to_excel(writer, sheet_name='costs')
+    print(f'\nReport successfully stored to "{filename}".')
 
 
 if __name__ == '__main__':

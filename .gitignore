@@ -1,3 +1,5 @@
 /.venv/
 /Source/connect.ini
 /Source/costsheet.log
+/Source/~$*.xlsx
+/Source/costs*.xlsx
