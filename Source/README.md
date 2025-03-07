@@ -10,3 +10,8 @@
 * python-dateutil
 * pandas
 * openpyxl
+* alive-progress
+
+# Notes
+
+Command to build exe with pyinstaller should include '--collect-data grapheme'
