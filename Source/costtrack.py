@@ -5,6 +5,7 @@ import pandas as pd
 from alive_progress import alive_bar
 import datetime as dt
 import argparse
+from data_access import issue_times, iso_hrs
 
 
 def define_parser():
@@ -21,13 +22,27 @@ def define_parser():
     return parser
 
 
+def test_data(issue):
+    for x in issue_times(issue):
+        print(x['date'], x['by'], x['kind'], x['from'], '->', x['value'])
+
+
 def spend(issue, person, start, final):
     # TODO: calculate
-    return 1
+    sp = sum(iso_hrs(x['value']) - iso_hrs(x['from']) for x in issue_times(issue)
+             if login_match(person['login'], x['by']) and
+             x['kind'] == 'spent' and
+             start.date() <= x['date'].date() <= final.date()
+             )
+    return sp
 
 
 def login_match(login, user) -> bool:
-    return login.lower() in user.display.lower()
+    try:
+        u = user.display
+    except AttributeError:
+        u = user
+    return login.lower() in u.lower()
 
 
 def main():
@@ -68,6 +83,9 @@ def main():
     if client.myself is None:
         raise Exception('Unable to connect Yandex Tracker.')
 
+    # test_data(client.issues['MTFW-1153'])
+    # return 0
+
     # reading projects data
 
     projects = pd.read_excel('ScanData.xlsx',
@@ -75,6 +93,12 @@ def main():
                              header=None, index_col=None,
                              usecols=[0, 1], skiprows=1,
                              names=['name', 'request'])
+    print('')
+    projects['size'] = 0
+    with alive_bar(len(projects), title='Projects lookup', theme='classic') as bar:
+        for index_prj, project in projects.iterrows():
+            projects.at[index_prj, 'size'] = len(list(client.issues.find(query=project['request'])))
+            bar()
     print('\nProjects list:\n', projects)
 
     # reading persons data
@@ -103,14 +127,16 @@ def main():
     report = pd.DataFrame(0,
                           index=persons['name'].values.tolist(),
                           columns=projects['name'].values.tolist())
-    with alive_bar(len(persons) * len(projects), title='Costs', theme='classic') as bar:
+    with alive_bar(int(len(persons) * sum(projects['size'].values)),
+                   title='Costs', theme='classic') as bar:
         for _, project in projects.iterrows():
             issues = client.issues.find(query=project['request'])
-            # print(f"Project '{project['name']}' contain {len(issues)} issue(s).")
             for _, person in persons.iterrows():
-                s = sum(spend(issue, person, start_date, final_date) for issue in issues)
+                s = 0
+                for issue in issues:
+                    s += spend(issue, person, start_date, final_date)
+                    bar()
                 report.at[person['name'], project['name']] = s
-                bar()
     print('Costs report:\n', report)
 
     # store the report

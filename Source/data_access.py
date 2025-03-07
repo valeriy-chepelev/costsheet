@@ -10,6 +10,33 @@ from types import SimpleNamespace
 _future_date = dt.datetime.now(dt.timezone.utc) + relativedelta(years=3)
 
 
+def _iso_split(s, split):
+    """ Splitter helper for converting ISO dt notation"""
+    if split in s:
+        n, s = s.split(split)
+    else:
+        n = 0
+    if n == '':
+        n = 0
+    return int(n), s
+
+
+def iso_hrs(s):
+    """ Convert ISO dt notation to hours.
+    Values except Weeks, Days, Hours ignored."""
+    if s is None:
+        return 0
+    # Remove prefix
+    s = s.split('P')[-1]
+    # Step through letter dividers
+    weeks, s = _iso_split(s, 'W')
+    days, s = _iso_split(s, 'D')
+    _, s = _iso_split(s, 'T')
+    hours, s = _iso_split(s, 'H')
+    # Convert all to hours
+    return (weeks * 5 + days) * 8 + hours
+
+
 def issue_cache(file_name):
     # Check cache folder is present or create it
     if not Path('cache').exists():
@@ -41,9 +68,12 @@ def issue_cache(file_name):
 def issue_times(issue):
     """ Return reverse-sorted by time list of issue spends, estimates, status and resolution changes"""
     sp = [{'date': dt.datetime.strptime(log.updatedAt, '%Y-%m-%dT%H:%M:%S.%f%z'),
+           'by': log.updatedBy.display,
            'kind': field['field'].id,
            'value': field['to'] if field['field'].id in ['spent', 'estimation']
-           else field['to'].key if field['to'] is not None else ''}
+           else field['to'].key if field['to'] is not None else '',
+           'from': field['from'] if field['field'].id in ['spent', 'estimation']
+           else field['from'].key if field['from'] is not None else ''}
           for log in issue.changelog for field in log.fields
           if field['field'].id in ['spent', 'estimation', 'resolution', 'status']]
     sp.sort(key=lambda d: d['date'], reverse=True)
