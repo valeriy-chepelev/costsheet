@@ -28,10 +28,14 @@ def test_data(issue):
 
 
 def spend(issue, person, start, final):
-    # TODO: calculate
-    sp = sum(iso_hrs(x['value']) - iso_hrs(x['from']) for x in issue_times(issue)
+    try:
+        lc = int(person['lazy'])
+    except ValueError:
+        lc = 0
+    sp = sum(((iso_hrs(x['value']) - iso_hrs(x['from'])) if x['kind'] == 'spent' else lc)
+             for x in issue_times(issue)
              if login_match(person['login'], x['by']) and
-             x['kind'] == 'spent' and
+             x['kind'] in ['spent', 'status'] and
              start.date() <= x['date'].date() <= final.date()
              )
     return sp
@@ -66,6 +70,7 @@ def main():
     # define dates
     # in not defined in argument - two last week set to next month, otherwise - to current month
 
+    # TODO: uncorrect date shifts
     date = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=14) if args.date is None else args.date
 
     start_date = date.replace(day=1)
@@ -95,11 +100,11 @@ def main():
                              names=['name', 'request'])
     print('')
     projects['size'] = 0
-    with alive_bar(len(projects), title='Projects lookup', theme='classic') as bar:
+    with alive_bar(len(projects), title='Projects', theme='classic') as bar:
         for index_prj, project in projects.iterrows():
             projects.at[index_prj, 'size'] = len(list(client.issues.find(query=project['request'])))
             bar()
-    print('\nProjects list:\n', projects)
+    print(projects)
 
     # reading persons data
 
@@ -113,13 +118,13 @@ def main():
 
     print()
     persons['accounts'] = ''
-    with alive_bar(len(persons), title='Persons lookup', theme='classic') as bar:
+    with alive_bar(len(persons), title='Persons', theme='classic') as bar:
         for index_pers, person in persons.iterrows():
             acc = [user.display for user in client.users
                    if login_match(person['login'], user)]
             persons.at[index_pers, 'accounts'] = ';'.join(acc) if len(acc) else 'WARNING: no accounts!'
             bar()
-    print('Persons list:\n', persons)
+    print(persons)
 
     # acquiring data from Tracker
 
@@ -137,7 +142,7 @@ def main():
                     s += spend(issue, person, start_date, final_date)
                     bar()
                 report.at[person['name'], project['name']] = s
-    print('Costs report:\n', report)
+    print(report)
 
     # store the report
 
