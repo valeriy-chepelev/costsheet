@@ -6,6 +6,9 @@ from alive_progress import alive_bar
 import datetime as dt
 import argparse
 from data_access import issue_times, iso_hrs
+from colorama import init as colorama_init
+from colorama import Fore
+from colorama import Style
 
 
 def define_parser():
@@ -51,6 +54,7 @@ def login_match(login, user) -> bool:
 
 def main():
     args = define_parser().parse_args()  # get CLI arguments
+    colorama_init()
 
     # start logging
 
@@ -68,14 +72,12 @@ def main():
     pd.set_option('display.width', 1000)
 
     # define dates
-    # in not defined in argument - two last week set to next month, otherwise - to current month
+    # in not defined in argument - two first week set to previous month, otherwise - to current month
 
-    # TODO: uncorrect date shifts
-    date = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=14) if args.date is None else args.date
-
+    date = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=-14) if args.date is None else args.date
     start_date = date.replace(day=1)
     final_date = (date.replace(day=28) + dt.timedelta(days=4)).replace(day=1) + dt.timedelta(days=-1)
-    print(f'Gathering costs report for {date.strftime("%B %Y")}')
+    print(f'Gathering costs report for {Fore.GREEN}{date.strftime("%B %Y")}{Style.RESET_ALL}')
 
     # configure and establish Tracker connection
 
@@ -122,7 +124,10 @@ def main():
         for index_pers, person in persons.iterrows():
             acc = [user.display for user in client.users
                    if login_match(person['login'], user)]
-            persons.at[index_pers, 'accounts'] = ';'.join(acc) if len(acc) else 'WARNING: no accounts!'
+            if len(acc):
+                persons.at[index_pers, 'accounts'] = ';'.join(acc)
+            else:
+                persons.at[index_pers, 'accounts'] = f'{Fore.RED}WARNING: no accounts!{Style.RESET_ALL}'
             bar()
     print(persons)
 
@@ -148,12 +153,12 @@ def main():
 
     with pd.ExcelWriter(filename := f'costs-{date.strftime("%m-%y")}.xlsx') as writer:
         report.to_excel(writer, sheet_name='costs')
-    print(f'\nReport successfully stored to "{filename}".')
+    print(f'\n{Fore.GREEN}Report successfully stored to {Fore.CYAN}{filename}{Style.RESET_ALL}')
 
 
 if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        print('Execution error:', e)
+        print(f'{Fore.RED}Execution error:{e}{Style.RESET_ALL}')
         logging.exception('Common error')

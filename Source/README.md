@@ -11,6 +11,7 @@
 * pandas
 * openpyxl
 * alive-progress
+* colorama
 
 # Notes
 
