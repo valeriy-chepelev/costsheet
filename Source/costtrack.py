@@ -25,14 +25,9 @@ def define_parser():
     return parser
 
 
-def test_data(issue):
-    for x in issue_times(issue):
-        print(x['date'], x['by'], x['kind'], x['from'], '->', x['value'])
-
-
 def spend(issue, person, start, final):
     try:
-        lc = int(person['lazy'])
+        lc = int(person['move_cost'])
     except ValueError:
         lc = 0
     sp = sum(((iso_hrs(x['value']) - iso_hrs(x['from'])) if x['kind'] == 'spent' else lc)
@@ -50,6 +45,16 @@ def login_match(login, user) -> bool:
     except AttributeError:
         u = user
     return login.lower() in u.lower()
+
+
+def users_jaccard(users):
+    """
+    Test difference between usernames
+    @param users: list of usernames
+    @return: min jaccard factor (float <= 1) of username relative to all the symbols
+    """
+    union = set(''.join(users))  # all the characters
+    return min([len(set(user) & union) / len(set(user) | union) for user in users], default=1.0)
 
 
 def main():
@@ -90,9 +95,6 @@ def main():
     if client.myself is None:
         raise Exception('Unable to connect Yandex Tracker.')
 
-    # test_data(client.issues['MTFW-1153'])
-    # return 0
-
     # reading projects data
 
     projects = pd.read_excel('ScanData.xlsx',
@@ -114,18 +116,16 @@ def main():
                             sheet_name='Persons',
                             header=None, index_col=None,
                             usecols=[0, 1, 2], skiprows=1,
-                            names=['name', 'login', 'lazy'])
-
-    # lookup persons in Tracker
-
+                            names=['name', 'login', 'move_cost'])
     print()
     persons['accounts'] = ''
     with alive_bar(len(persons), title='Persons', theme='classic') as bar:
         for index_pers, person in persons.iterrows():
-            acc = [user.display for user in client.users
-                   if login_match(person['login'], user)]
-            if len(acc):
-                persons.at[index_pers, 'accounts'] = ';'.join(acc)
+            users_list = [user.display for user in client.users if login_match(person['login'], user)]
+            jf = users_jaccard([a.split('@')[0].lower() for a in users_list])
+            warn = '' if jf > 0.8 else f'{Fore.RED}WARNING: too wide selector: {Style.RESET_ALL}'
+            if len(users_list):
+                persons.at[index_pers, 'accounts'] = warn + ';'.join(users_list)
             else:
                 persons.at[index_pers, 'accounts'] = f'{Fore.RED}WARNING: no accounts!{Style.RESET_ALL}'
             bar()
@@ -153,6 +153,7 @@ def main():
 
     with pd.ExcelWriter(filename := f'costs-{date.strftime("%m-%y")}.xlsx') as writer:
         report.to_excel(writer, sheet_name='costs')
+        # use writer to save multiple dataframes as sheets in one file
     print(f'\n{Fore.GREEN}Report successfully stored to {Fore.CYAN}{filename}{Style.RESET_ALL}')
 
 
