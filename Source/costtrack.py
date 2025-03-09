@@ -5,6 +5,7 @@ import pandas as pd
 from alive_progress import alive_bar
 import datetime as dt
 import argparse
+import os
 from data_access import issue_times, iso_hrs
 from colorama import init as colorama_init
 from colorama import Fore
@@ -16,12 +17,17 @@ def define_parser():
     """
     parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.0 - Yandex Tracker costs crawler by VCh.',
                                      epilog='Tracker connection settings in "connect.ini".')
-
+    parser.add_argument('filename', nargs='?', default='ScanData.xlsx',
+                        help='input excel projects and persons config; default - "ScanData.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
-                        type=lambda s: dt.datetime.strptime(s, '%m-%y'),
-                        help='specify report date in "m-y" format (like "1-25" for january 2025)')
+                        type=lambda s: dt.datetime.strptime(s, '%y-%m'),
+                        help='specify report date in "y-m" format (like "25-1" for january 2025); '
+                              'default - previous month until 14th, current month since 15th')
+    parser.add_argument('-n', '--noname', dest='add_name', action='store_false',
+                        help='suppress user name in report filename')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='logging in debug mode (include tracker and issues info)')
+    parser.set_defaults(add_name=True)
     return parser
 
 
@@ -58,11 +64,11 @@ def users_jaccard(users):
 
 
 def main():
+
+    # init
+
     args = define_parser().parse_args()  # get CLI arguments
     colorama_init()
-
-    # start logging
-
     logging.basicConfig(filename='costsheet.log',
                         filemode='a',
                         format='%(asctime)s %(name)s %(levelname)s %(message)s',
@@ -75,6 +81,11 @@ def main():
     pd.set_option('display.max_rows', 500)
     pd.set_option('display.max_columns', 500)
     pd.set_option('display.width', 1000)
+
+    # check input file present
+
+    if not os.path.isfile(args.filename):
+        raise ValueError(f'{args.filename} is not a file!')
 
     # define dates
     # in not defined in argument - two first week set to previous month, otherwise - to current month
@@ -97,12 +108,12 @@ def main():
 
     # reading projects data
 
-    projects = pd.read_excel('ScanData.xlsx',
+    projects = pd.read_excel(args.filename,
                              sheet_name='Projects',
                              header=None, index_col=None,
                              usecols=[0, 1], skiprows=1,
                              names=['name', 'request'])
-    print('')
+    print()
     projects['size'] = 0
     with alive_bar(len(projects), title='Projects', theme='classic') as bar:
         for index_prj, project in projects.iterrows():
@@ -112,7 +123,7 @@ def main():
 
     # reading persons data
 
-    persons = pd.read_excel('ScanData.xlsx',
+    persons = pd.read_excel(args.filename,
                             sheet_name='Persons',
                             header=None, index_col=None,
                             usecols=[0, 1, 2], skiprows=1,
@@ -151,10 +162,12 @@ def main():
 
     # store the report
 
-    with pd.ExcelWriter(filename := f'costs-{date.strftime("%m-%y")}.xlsx') as writer:
+    user_name = ''.join(s for s in os.getlogin() if s.isalnum()) + '-'
+    report_name = f'{user_name if args.add_name else ""}costs-{date.strftime("%y-%m")}.xlsx'
+    with pd.ExcelWriter(report_name) as writer:
         report.to_excel(writer, sheet_name='costs')
         # use writer to save multiple dataframes as sheets in one file
-    print(f'\n{Fore.GREEN}Report successfully stored to {Fore.CYAN}{filename}{Style.RESET_ALL}')
+    print(f'\n{Fore.GREEN}Report successfully stored to {Fore.CYAN}{report_name}{Style.RESET_ALL}')
 
 
 if __name__ == '__main__':
