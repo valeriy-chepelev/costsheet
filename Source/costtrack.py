@@ -22,7 +22,7 @@ def define_parser():
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
                         type=lambda s: dt.datetime.strptime(s, '%y-%m'),
                         help='specify report date in "y-m" format (like "25-1" for january 2025); '
-                              'default - previous month until 14th, current month since 15th')
+                             'default - previous month until 14th, current month since 15th')
     parser.add_argument('-n', '--noname', dest='add_name', action='store_false',
                         help='suppress user name in report filename')
     parser.add_argument('--debug', default=False, action='store_true',
@@ -64,7 +64,6 @@ def users_jaccard(users):
 
 
 def main():
-
     # init
 
     args = define_parser().parse_args()  # get CLI arguments
@@ -73,7 +72,7 @@ def main():
                         filemode='a',
                         format='%(asctime)s %(name)s %(levelname)s %(message)s',
                         datefmt='%d/%m/%y %H:%M:%S',
-                        level=logging.INFO if args.debug else logging.ERROR)
+                        level=logging.INFO if args.debug else logging.WARNING)
     logging.info('Costtrack started.')
 
     # Configure pandas to full output
@@ -134,10 +133,14 @@ def main():
         for index_pers, person in persons.iterrows():
             users_list = [user.display for user in client.users if login_match(person['login'], user)]
             jf = users_jaccard([a.split('@')[0].lower() for a in users_list])
-            warn = '' if jf > 0.8 else f'{Fore.RED}WARNING: too wide selector: {Style.RESET_ALL}'
+            warn = ''
+            if jf < 0.8:
+                warn = f'{Fore.RED}WARNING: too wide selector: {Style.RESET_ALL}'
+                logging.warning(f'too wide selector as {person["login"]}: {";".join(users_list)}')
             if len(users_list):
                 persons.at[index_pers, 'accounts'] = warn + ';'.join(users_list)
             else:
+                logging.warning(f'no accounts for {person["login"]}')
                 persons.at[index_pers, 'accounts'] = f'{Fore.RED}WARNING: no accounts!{Style.RESET_ALL}'
             bar()
     print(persons)
@@ -155,7 +158,11 @@ def main():
             for _, person in persons.iterrows():
                 s = 0
                 for issue in issues:
-                    s += spend(issue, person, start_date, final_date)
+                    if (dt.datetime.strptime(issue.updatedAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
+                        >= start_date.date()) and (
+                            dt.datetime.strptime(issue.createdAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
+                            <= final_date.date()):
+                        s += spend(issue, person, start_date, final_date)
                     bar()
                 report.at[person['name'], project['name']] = s
     print(report)
