@@ -7,7 +7,6 @@
 
 # Dependencies
 * yandex_tracker_client
-* python-dateutil
 * pandas
 * openpyxl
 * alive-progress
@@ -15,4 +14,6 @@
 
 # Notes
 
-Command to build exe with pyinstaller should include '--collect-data grapheme'
+Command to build .exe with pyinstaller:
+    
+    pyinstaller costtrack.py --onefile --collect-data grapheme
