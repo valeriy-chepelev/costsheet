@@ -4,3 +4,5 @@
 /Source/~$*.xlsx
 /Source/*costs*.xlsx
 /Source/cache/
+/Source/build/
+/Source/dist/
