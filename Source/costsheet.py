@@ -9,6 +9,7 @@ from colorama import Fore
 from colorama import Style
 import re
 import math
+from pprint import pp
 
 
 def define_parser():
@@ -23,6 +24,7 @@ def define_parser():
 def import_hr_table(filename):
     table = pd.read_excel(filename, header=None, index_col=None,
                           skiprows=9, skipfooter=5)
+    persons = list()
     for index, row in table.iterrows():
         # detect person record by cyrillic in column 2
         if re.match('[А-ЯЁа-яё \\-]+', str(row[2])):
@@ -32,15 +34,26 @@ def import_hr_table(filename):
             if not re.match('^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*(?:\\s[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*){1,2}$',
                             name):
                 raise ValueError(f'Name not properly formatted: "{name}"')
-            spec = str(table.loc[index + 2, 1]).strip()
-            status = table.loc[index + 1, 9:].tolist()
-            times = row[9:].to_list()
-            times = [0 if math.isnan(t) else t for t in times]  # Zero Nans
+            spec = str(table.loc[index + 2, 1]).strip()  # speciality
+            status = table.loc[index + 1, 9:].tolist()  # slice of status letters
+            times = row[9:].to_list()  # slice of day-times
+            times = [0 if math.isnan(t) else t for t in times]  # zero NaNs
+            # check days count is the same
             if len(times) != len(status):
                 raise ImportError(f'Timedata not match status for "{name}"')
-            print(name, spec)
-            print(times)
-            print(status)
+            # build dictionary data structure
+            persons.append({'name': name,
+                            'spec': spec,
+                            'total': sum(times),
+                            'days': [{'date': d,
+                                      'time': x[0],
+                                      'status': x[1]}
+                                     for d, x in enumerate(zip(times, status), 1)]})
+        elif not (type(row[2]) is float and math.isnan(row[2])):
+            # if ceil 2 contain something but not a name
+            logging.warning(msg := f'Cell [{index}, 2] contain strange data.')
+            print(f'{Fore.RED}WARNING: {msg}{Style.RESET_ALL}')
+    return persons
 
 
 def import_projects_data():
@@ -69,7 +82,7 @@ def main():
     pd.set_option('display.max_columns', 500)
     pd.set_option('display.width', 1000)
 
-    import_hr_table('TestTable.xlsx')
+    pp(import_hr_table('TestTable.xlsx'))
 
 
 if __name__ == '__main__':
