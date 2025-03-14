@@ -56,8 +56,12 @@ def import_hr_table(filename):
     return persons
 
 
-def import_projects_data():
-    pass
+def import_projects_data(filename):
+    return pd.read_excel(filename, index_col=0)
+
+
+def user_match(user: str, name: str):
+    return user.lower() in name.lower()
 
 
 def export_sheet():
