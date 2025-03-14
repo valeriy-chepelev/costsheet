@@ -11,6 +11,7 @@
 * openpyxl
 * alive-progress
 * colorama
+* docxtpl
 
 # Notes
 
