@@ -21,10 +21,8 @@ def define_parser():
                         help='input excel projects and persons config; default - "ScanData.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
                         type=lambda s: dt.datetime.strptime(s, '%y-%m'),
-                        help='specify report date in "y-m" format (like "25-1" for january 2025); '
+                        help='specify report period in "y-m" format (like "25-1" for january 2025); '
                              'default - previous month until 14th, current month since 15th')
-    parser.add_argument('-n', '--noname', dest='add_name', action='store_false',
-                        help='suppress user name in report filename')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='logging in debug mode (include tracker and issues info)')
     parser.set_defaults(add_name=True)
@@ -105,6 +103,11 @@ def main():
     if client.myself is None:
         raise Exception('Unable to connect Yandex Tracker.')
 
+    # reading boss data (just for copy to output)
+
+    boss = pd.read_excel(args.filename, sheet_name='Boss', header=None)
+    print(boss)
+
     # reading projects data
 
     projects = pd.read_excel(args.filename,
@@ -169,9 +172,9 @@ def main():
 
     # store the report
 
-    user_name = ''.join(s for s in os.getlogin() if s.isalnum()) + '-'
-    report_name = f'{user_name if args.add_name else ""}costs-{date.strftime("%y-%m")}.xlsx'
+    report_name = f'costs-{date.strftime("%y-%m")}.xlsx'
     with pd.ExcelWriter(report_name) as writer:
+        boss.to_excel(writer, sheet_name='boss', header=False, index=False)
         report.to_excel(writer, sheet_name='costs')
         # use writer to save multiple dataframes as sheets in one file
     print(f'\n{Fore.GREEN}Report successfully stored to {Fore.CYAN}{report_name}{Style.RESET_ALL}')
