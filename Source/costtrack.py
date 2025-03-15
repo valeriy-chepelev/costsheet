@@ -15,7 +15,7 @@ from colorama import Style
 def define_parser():
     """ Return CLI arguments parser
     """
-    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.0 - Yandex Tracker costs crawler by VCh.',
+    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.1 - Yandex Tracker costs crawler by VCh.',
                                      epilog='Tracker connection settings in "connect.ini".')
     parser.add_argument('filename', nargs='?', default='ScanData.xlsx',
                         help='input excel projects and persons config; default - "ScanData.xlsx"')
