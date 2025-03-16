@@ -54,7 +54,7 @@ def import_hr_table(filename):
             if len(times) != len(status):
                 raise ImportError(f'Timedata not match status for "{name}"')
             # build dictionary data structure
-            person ={'name': name, 'num': emp_num, 'spec': spec}
+            person = {'name': name, 'num': emp_num, 'spec': spec, 'total': sum(times)}
             person.update({f'h{i}': t for i, t in enumerate(times, 1)})
             person.update({f'pres{i}': t for i, t in enumerate(status, 1)})
             persons.append(person)
@@ -69,6 +69,12 @@ def export_sheet(context):
     doc = DocxTemplate('MyTemplate.docx')
     doc.render(context)
     doc.save('DocExample.docx')
+
+
+def circular(array):
+    while True:
+        for item in array:
+            yield item
 
 
 def main():
@@ -124,16 +130,35 @@ def main():
     pp_costs.set_index('fullname', inplace=True)  # full names added and reindexed
     pp_costs['summary'] = pp_costs.sum(axis='columns')  # get summary column
     pp_costs.drop(pp_costs[pp_costs.summary == 0].index, inplace=True)  # drop persons with zero summary
-    pp_costs.drop('summary', axis='columns', inplace=True)  # delete summary column ???
+    # pp_costs.drop('summary', axis='columns', inplace=True)  # delete summary column ???
     pp_costs.sort_index()  # sort by name
+
+    # calculate employee projects factor (total job time/ projects summary time)
+    pp_costs = pp_costs.merge(emp_table[['total']], how='left', sort=False,
+                              left_index=True, right_index=True).eval('factor=total/summary')
     print('Original costs data:')
     print(pp_costs)
 
-    # recalculate projects costs according to employee total time
-    # (only if total cost > total time)
-
     # build person data table: project at day = time (time=min(table day time, rest_project_time until rpt=0)
     # if total cost too less when time - can divide day_time
+
+    prj_names = list(pp_costs)[:-3]
+    for person, costs in pp_costs.iterrows():
+        projects = [x[0] for x in zip(prj_names, list(costs)[:-3]) if x[1] > 0]  # list of person's projects
+        rest_costs = [x for x in list(costs)[:-3] if x > 0]
+        index_counter = circular(range(len(projects)))
+        try:
+            i = next(index_counter)
+            days = emp_table.loc[person]
+            count = (len(days)-3)//2  # 3 is firs position of hours data
+            for day in days[3:count+3]:  # 3:count+3 to retrieve all hours data; +count to get presence data
+                # TODO: move cost from rest_sosts to a specified project and day
+                print(person, i, day)
+                i = next(index_counter)
+        finally:
+            del index_counter
+
+
 
     # build context: [projects [persons]]
 
