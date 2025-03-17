@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-from alive_progress import alive_bar
 import datetime as dt
 import argparse
 import os
@@ -9,9 +8,7 @@ from colorama import Fore
 from colorama import Style
 import re
 import math
-from pprint import pp
 from docxtpl import DocxTemplate
-import math
 
 
 def define_parser():
@@ -19,12 +16,12 @@ def define_parser():
     """
     parser = argparse.ArgumentParser(description='Costsheet|Costsheet v.1.0 - Costs formatter by VCh.')
     parser.add_argument('-t', '--template', metavar='TEMPLATE', default='t-13-template v4.docx',
-                        help='template docx filename (default "tt-13-template v4.docx"')
+                        help='template docx filename (default "t-13-template v4.docx"')
     parser.add_argument('-e', '--employees', metavar='EMPLOYEES', default='TestTable.xlsx',
                         help='employees monthly report xlsx filename (default "TestTable.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
                         type=lambda s: dt.datetime.strptime(s, '%y-%m'),
-                        help='specify report period in "y-m" format (like "25-1" for january 2025); '
+                        help='report period in "y-m" format (like "25-1" for january 2025); '
                              'default - previous month until 14th, current month since 15th')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='logging in debug mode (include tracker and issues info)')
@@ -39,7 +36,7 @@ def import_hr_table(filename):
         # detect person record by cyrillic in column 2
         if re.match('[А-ЯЁа-яё \\-]+', str(row[2])):
             name = ' '.join(str(row[2]).split() +
-                            str(in_table.loc[index + 1, 1]).split())  # split & join to remove extra spaces
+                            str(in_table.iloc[int(index) + 1, 1]).split())  # split & join to remove extra spaces
             # over-check name structure
             if not re.match('^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*(?:\\s[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*){1,2}$',
                             name):
@@ -47,8 +44,8 @@ def import_hr_table(filename):
             emp_num = str(row[1]).strip()
             if not re.match('^\\d+$', emp_num):
                 raise ValueError(f'Employee "{name}" number not properly formatted: "{emp_num}"')
-            spec = str(in_table.loc[index + 2, 1]).strip()  # speciality
-            status = in_table.loc[index + 1, 9:].tolist()  # slice of status letters
+            spec = str(in_table.iloc[int(index) + 2, 1]).strip()  # speciality
+            status = in_table.iloc[int(index) + 1, 9:].tolist()  # slice of status letters
             times = row[9:].to_list()  # slice of day-times
             times = [0 if math.isnan(t) else t for t in times]  # zero NaNs
             # check days count is the same
@@ -66,11 +63,12 @@ def import_hr_table(filename):
     return persons
 
 
-def export_sheet(context, template):
-    print('Rendering...')
+def export_sheet(context, template, filename='DocExample.docx'):
+    print(f'{Fore.GREEN}Rendering...{Style.RESET_ALL}')
     doc = DocxTemplate(template)
     doc.render(context)
-    doc.save('DocExample.docx')
+    doc.save(filename)
+    print(f'{Fore.GREEN}Complete and stored to "{filename}".{Style.RESET_ALL}')
 
 
 def main():
@@ -93,11 +91,13 @@ def main():
 
     # define dates
     # in not defined in argument - two first week set to previous month, otherwise - to current month
-    date = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=-14) if args.date is None else args.date
-    print(f'Building costs report for {Fore.GREEN}{date.strftime("%B %Y")}{Style.RESET_ALL}')
+    today = dt.datetime.now(dt.timezone.utc)
+    rep_period = today + dt.timedelta(days=-14) if args.date is None else args.date
+    days_count = ((rep_period.replace(day=28) + dt.timedelta(days=4)).replace(day=1) + dt.timedelta(days=-1)).day
+    print(f'Building costs report for {Fore.GREEN}{rep_period.strftime("%B %Y")}{Style.RESET_ALL}')
 
     # load projects/persons and boss
-    pp_filename = f'costs-{date.strftime("%y-%m")}.xlsx'
+    pp_filename = f'costs-{rep_period.strftime("%y-%m")}.xlsx'
     if not os.path.isfile(pp_filename):
         raise ValueError(f'{pp_filename} not found!')
     pp_costs = pd.read_excel(pp_filename, sheet_name='costs', index_col=0)
@@ -121,10 +121,9 @@ def main():
             raise ValueError(f'no employee data for {name}')
         full_names.append(new_name[0])
     pp_costs['fullname'] = full_names
-    pp_costs.set_index('fullname', inplace=True)  # full names added and reindexed
+    pp_costs.set_index('fullname', inplace=True)  # full names added and reindex
     pp_costs['summary'] = pp_costs.sum(axis='columns')  # get summary column
     pp_costs.drop(pp_costs[pp_costs.summary == 0].index, inplace=True)  # drop persons with zero summary
-    # pp_costs.drop('summary', axis='columns', inplace=True)  # delete summary column ???
     pp_costs.sort_index()  # sort by name
 
     # calculate employee projects factor (total job time/ projects summary time)
@@ -148,7 +147,6 @@ def main():
     pers_list = list()
     for person, costs in pp_costs.iterrows():  # iterate persons and projects costs
         emp_data = emp_table.loc[person]  # employee daily hours and presence
-        days_count = (len(emp_data) - 3) // 2  # 3 is first position of hours data
         date = 1  # start at first day, select employee daily data
         job = emp_data[f'h{date}']
         presence = emp_data[f'pres{date}']
@@ -160,9 +158,9 @@ def main():
         # iterate projects those person participate
         for project_name, project_cost in [x for x in zip(prj_names, list(costs)[:-3]) if x[1] > 0]:
             pers['projects'].update({project_name: dict()})  # attach project to person
-            while project_cost > 0:  # add project cost to days, day by day
-                spent = min(project_cost, job)  # how much we can spent to a day
-                pers['projects'][project_name].update({f'h{date}': spent,
+            while not project_cost < 1:  # add project cost to days, day by day
+                spent = int(min(project_cost, job))  # how much we can spend to a day
+                pers['projects'][project_name].update({f'h{date}': spent if spent > 0 else '-',
                                                        f'pres{date}': presence})  # add to project
                 project_cost -= spent  # decrease project cost
                 job -= spent  # decrease day job
@@ -170,6 +168,15 @@ def main():
                     date += 1
                     job = emp_data[f'h{date}']
                     presence = emp_data[f'pres{date}']
+                # calc half-totals and totals
+                part1 = [val for key, val in pers['projects'][project_name].items()
+                         if re.match('^h(?:1[0-5]|[1-9])$', key) and type(val) is int]
+                part2 = [val for key, val in pers['projects'][project_name].items()
+                         if re.match('^h(1[6-9]|2\\d|3[0-1])$', key) and type(val) is int]
+                pers['projects'][project_name].update({
+                    'hp1': sum(part1), 'dp1': len(part1),
+                    'hp2': sum(part2), 'dp2': len(part2),
+                    'sh': sum(part1) + sum(part2), 'sd': len(part1) + len(part2)})
         pers_list.append(pers)
 
     # fill empty days with default employee presence and zero times
@@ -179,19 +186,21 @@ def main():
             for date in range(1, 32):  # iterate max number of days: 1 to 31
                 if f'h{date}' not in pers_data['projects'][project]:  # is date empty
                     try:  # if days exceeds month - we get KeyError from emp_table.loc
+                        if date > days_count:
+                            raise KeyError('outdated')
                         pers_data['projects'][project].update(
-                            {f'h{date}': 0,
-                             f'pres{date}': emp_table.loc[pers_data['name'],
-                             f'pres{date}']})
+                            {f'h{date}': '-',
+                             f'pres{date}': emp_table.loc[pers_data['name'], f'pres{date}']})
                     except KeyError:
-                        pass
+                        pers_data['projects'][project].update(
+                            {f'h{date}': 'X', f'pres{date}': 'X'})
 
     # build context: [projects [persons]]
 
-    common_dict = {'rep_date': 1,
-                   'rep_period': 2,
+    common_dict = {'rep_date': today.strftime("%d.%m.%Y"),
+                   'rep_period': rep_period.strftime("%m.%Y"),
                    'hod_spec': boss.loc[0, 1],
-                   'hod_name': boss.loc[1, 1]}  # TODO: common context data
+                   'hod_name': boss.loc[1, 1]}
     context = {'projects': list()}
     for project in prj_names:
         ctx_pers_list = [p for p in pers_list if project in p['projects']]  # list filtered by project
@@ -205,7 +214,8 @@ def main():
         context['projects'].append(p_dict)
 
     # render and output
-    export_sheet(context, args.template)
+    report_filename = ''.join(s for s in os.getlogin() if s.isalnum()) + f'-t13-{rep_period.strftime("%y-%m")}.docx'
+    export_sheet(context, args.template, report_filename)
 
 
 if __name__ == '__main__':
