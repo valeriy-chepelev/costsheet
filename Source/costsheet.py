@@ -11,6 +11,7 @@ import re
 import math
 from pprint import pp
 from docxtpl import DocxTemplate
+import math
 
 
 def define_parser():
@@ -69,12 +70,6 @@ def export_sheet(context):
     doc = DocxTemplate('MyTemplate.docx')
     doc.render(context)
     doc.save('DocExample.docx')
-
-
-def circular(array):
-    while True:
-        for item in array:
-            yield item
 
 
 def main():
@@ -136,29 +131,50 @@ def main():
     # calculate employee projects factor (total job time/ projects summary time)
     pp_costs = pp_costs.merge(emp_table[['total']], how='left', sort=False,
                               left_index=True, right_index=True).eval('factor=total/summary')
-    print('Original costs data:')
+    # trim exceeded cost
+    for person, data in pp_costs.iterrows():
+        if data['factor'] < 1:
+            print(f'{Fore.RED}WARNING: exceeded time for {person}: {data["summary"]} > {data["total"]},'
+                  f' corrected. {Style.RESET_ALL}')
+            logging.warning(f'exceeded time for {person}: {data["summary"]} > {data["total"]},'
+                            f' corrected.')
+            for project in list(pp_costs)[:-3]:
+                pp_costs.at[person, project] = math.floor(data['factor'] * data[project])
+    print('Costs data:')
     print(pp_costs)
 
-    # build person data table: project at day = time (time=min(table day time, rest_project_time until rpt=0)
-    # if total cost too less when time - can divide day_time
+    # build persons data structure: project at day = time (time=min(table day time, rest_project_time until rpt=0)
 
     prj_names = list(pp_costs)[:-3]
-    for person, costs in pp_costs.iterrows():
-        projects = [x[0] for x in zip(prj_names, list(costs)[:-3]) if x[1] > 0]  # list of person's projects
-        rest_costs = [x for x in list(costs)[:-3] if x > 0]
-        index_counter = circular(range(len(projects)))
-        try:
-            i = next(index_counter)
-            days = emp_table.loc[person]
-            count = (len(days)-3)//2  # 3 is firs position of hours data
-            for day in days[3:count+3]:  # 3:count+3 to retrieve all hours data; +count to get presence data
-                # TODO: move cost from rest_sosts to a specified project and day
-                print(person, i, day)
-                i = next(index_counter)
-        finally:
-            del index_counter
+    pers_list = list()
+    for person, costs in pp_costs.iterrows():  # iterate persons and projects costs
+        emp_data = emp_table.loc[person]  # employee daily hours and presence
+        days_count = (len(emp_data) - 3) // 2  # 3 is first position of hours data
+        date = 1  # start at first day, select employee daily data
+        job = emp_data[f'h{date}']
+        presence = emp_data[f'pres{date}']
+        # prepare person dictionary
+        pers = {'name': person,
+                'num': emp_data['num'],
+                'spec': emp_data['spec'],
+                'projects': dict()}
+        # iterate projects there person participate
+        for project_name, project_cost in [x for x in zip(prj_names, list(costs)[:-3]) if x[1] > 0]:
+            pers['projects'].update({project_name: dict()})  # attach project to person
+            while project_cost > 0:  # add project cost to days, day by day
+                spent = min(project_cost, job)  # how much we can spent to a day
+                pers['projects'][project_name].update({f'h{date}': spent,
+                                                       f'pres{date}': presence})  # add to project
+                project_cost -= spent  # decrease project cost
+                job -= spent  # decrease day job
+                if job < 1:  # if day job over - take next day
+                    date += 1
+                    job = emp_data[f'h{date}']
+                    presence = emp_data[f'pres{date}']
+        pers_list.append(pers)
+    pp(pers_list)
 
-
+    # fill empty days with default employee presence and zero times
 
     # build context: [projects [persons]]
 
