@@ -18,8 +18,8 @@ def define_parser():
     """ Return CLI arguments parser
     """
     parser = argparse.ArgumentParser(description='Costsheet|Costsheet v.1.0 - Costs formatter by VCh.')
-    parser.add_argument('-t', '--template', metavar='TEMPLATE', default='MyTemplate.docx',
-                        help='template docx filename (default "t-13-template.docx"')
+    parser.add_argument('-t', '--template', metavar='TEMPLATE', default='t-13-template v4.docx',
+                        help='template docx filename (default "tt-13-template v4.docx"')
     parser.add_argument('-e', '--employees', metavar='EMPLOYEES', default='TestTable.xlsx',
                         help='employees monthly report xlsx filename (default "TestTable.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
@@ -66,8 +66,9 @@ def import_hr_table(filename):
     return persons
 
 
-def export_sheet(context):
-    doc = DocxTemplate('MyTemplate.docx')
+def export_sheet(context, template):
+    print('Rendering...')
+    doc = DocxTemplate(template)
     doc.render(context)
     doc.save('DocExample.docx')
 
@@ -102,12 +103,10 @@ def main():
     pp_costs = pd.read_excel(pp_filename, sheet_name='costs', index_col=0)
     boss = pd.read_excel(pp_filename, sheet_name='boss', header=None, index_col=None, usecols=[1])
     print(boss.loc[0, 1], boss.loc[1, 1])
-    # print(pp_costs)
 
     # load and parse employee table
     emp_table = pd.DataFrame(import_hr_table(args.employees))
     emp_table.set_index('name', inplace=True)
-    # print(emp_table)
 
     # find and update persons names in persons/projects
     # reindex, clear zero persons, sort by name
@@ -158,7 +157,7 @@ def main():
                 'num': emp_data['num'],
                 'spec': emp_data['spec'],
                 'projects': dict()}
-        # iterate projects there person participate
+        # iterate projects those person participate
         for project_name, project_cost in [x for x in zip(prj_names, list(costs)[:-3]) if x[1] > 0]:
             pers['projects'].update({project_name: dict()})  # attach project to person
             while project_cost > 0:  # add project cost to days, day by day
@@ -172,7 +171,6 @@ def main():
                     job = emp_data[f'h{date}']
                     presence = emp_data[f'pres{date}']
         pers_list.append(pers)
-    # pp(pers_list)
 
     # fill empty days with default employee presence and zero times
 
@@ -188,11 +186,26 @@ def main():
                     except KeyError:
                         pass
 
-    pp(pers_list)
-
     # build context: [projects [persons]]
 
+    common_dict = {'rep_date': 1,
+                   'rep_period': 2,
+                   'hod_spec': boss.loc[0, 1],
+                   'hod_name': boss.loc[1, 1]}  # TODO: common context data
+    context = {'projects': list()}
+    for project in prj_names:
+        ctx_pers_list = [p for p in pers_list if project in p['projects']]  # list filtered by project
+        p_dict = {'project': project,
+                  'emps': [{'ord': i,
+                            'name': p['name'],
+                            'num': p['num'],
+                            'spec': p['spec']} | p['projects'][project]
+                           for i, p in enumerate(ctx_pers_list, 1)]}
+        p_dict.update(common_dict)
+        context['projects'].append(p_dict)
+
     # render and output
+    export_sheet(context, args.template)
 
 
 if __name__ == '__main__':
