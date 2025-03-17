@@ -172,9 +172,23 @@ def main():
                     job = emp_data[f'h{date}']
                     presence = emp_data[f'pres{date}']
         pers_list.append(pers)
-    pp(pers_list)
+    # pp(pers_list)
 
     # fill empty days with default employee presence and zero times
+
+    for pers_data in pers_list:
+        for project in pers_data['projects']:
+            for date in range(1, 32):  # iterate max number of days: 1 to 31
+                if f'h{date}' not in pers_data['projects'][project]:  # is date empty
+                    try:  # if days exceeds month - we get KeyError from emp_table.loc
+                        pers_data['projects'][project].update(
+                            {f'h{date}': 0,
+                             f'pres{date}': emp_table.loc[pers_data['name'],
+                             f'pres{date}']})
+                    except KeyError:
+                        pass
+
+    pp(pers_list)
 
     # build context: [projects [persons]]
 
