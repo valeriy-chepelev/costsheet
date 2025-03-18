@@ -160,10 +160,11 @@ def main():
             pers['projects'].update({project_name: dict()})  # attach project to person
             while not project_cost < 1:  # add project cost to days, day by day
                 spent = int(min(project_cost, job))  # how much we can spend to a day
-                pers['projects'][project_name].update({f'h{date}': spent if spent > 0 else '-',
-                                                       f'pres{date}': presence})  # add to project
-                project_cost -= spent  # decrease project cost
-                job -= spent  # decrease day job
+                if spent:
+                    pers['projects'][project_name].update({f'h{date}': spent,
+                                                           f'pres{date}': presence})  # add to project
+                    project_cost -= spent  # decrease project cost
+                    job -= spent  # decrease day job
                 if job < 1:  # if day job over - take next day
                     date += 1
                     job = emp_data[f'h{date}']
@@ -189,8 +190,9 @@ def main():
                         if date > days_count:
                             raise KeyError('outdated')
                         pers_data['projects'][project].update(
-                            {f'h{date}': '-',
-                             f'pres{date}': emp_table.loc[pers_data['name'], f'pres{date}']})
+                            {f'h{date}': ' ',
+                             f'pres{date}': 'Н' if emp_table.loc[pers_data['name'], f'h{date}'] > 0
+                             else emp_table.loc[pers_data['name'], f'pres{date}']})
                     except KeyError:
                         pers_data['projects'][project].update(
                             {f'h{date}': 'X', f'pres{date}': 'X'})
