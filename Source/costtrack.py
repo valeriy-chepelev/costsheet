@@ -6,7 +6,7 @@ from alive_progress import alive_bar
 import datetime as dt
 import argparse
 import os
-from data_access import issue_times, iso_hrs
+from data_access import issue_times, iso_hrs, linked_issues
 from colorama import init as colorama_init
 from colorama import Fore
 from colorama import Style
@@ -15,7 +15,7 @@ from colorama import Style
 def define_parser():
     """ Return CLI arguments parser
     """
-    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.1 - Yandex Tracker costs crawler by VCh.',
+    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.2 - Yandex Tracker costs crawler by VCh.',
                                      epilog='Tracker connection settings in "connect.ini".')
     parser.add_argument('filename', nargs='?', default='ScanData.xlsx',
                         help='input excel projects and persons config; default - "ScanData.xlsx"')
@@ -59,6 +59,21 @@ def users_jaccard(users):
     """
     union = set(''.join(users))  # all the characters
     return min([len(set(user) & union) / len(set(user) | union) for user in users], default=1.0)
+
+
+def get_issues(client, request):
+    if len(request) == 0:
+        return list()
+    if request[0] == "#":
+        ancestors = [i.strip() for i in request[1:].split(',')]
+        keys = set(ancestors.copy())
+        while ancestors:
+            child = [i.key for i in linked_issues(client.issues[ancestors.pop()])]
+            keys.update(child)
+            ancestors.extend(child)
+        return [client.issues[k] for k in keys]
+    else:
+        return list(client.issues.find(query=request))
 
 
 def main():
@@ -119,7 +134,7 @@ def main():
     projects['size'] = 0
     with alive_bar(len(projects), title='Projects', theme='classic') as bar:
         for index_prj, project in projects.iterrows():
-            projects.at[index_prj, 'size'] = len(list(client.issues.find(query=project['request'])))
+            projects.at[index_prj, 'size'] = len(get_issues(client, project['request']))
             bar()
     print(projects)
 
@@ -157,7 +172,7 @@ def main():
     with alive_bar(int(len(persons) * sum(projects['size'].values)),
                    title='Costs', theme='classic') as bar:
         for _, project in projects.iterrows():
-            issues = client.issues.find(query=project['request'])
+            issues = get_issues(client, project['request'])
             for _, person in persons.iterrows():
                 s = 0
                 for issue in issues:

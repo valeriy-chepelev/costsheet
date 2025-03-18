@@ -123,8 +123,8 @@ def main():
     pp_costs['fullname'] = full_names
     pp_costs.set_index('fullname', inplace=True)  # full names added and reindex
     pp_costs['summary'] = pp_costs.sum(axis='columns')  # get summary column
-    pp_costs.drop(pp_costs[pp_costs.summary == 0].index, inplace=True)  # drop persons with zero summary
-    pp_costs.sort_index()  # sort by name
+    pp_costs = pp_costs.loc[(pp_costs.sum(axis=1) != 0), (pp_costs.sum(axis=0) != 0)]  # drop zero rows and cols
+    pp_costs.sort_index()  # sort by person name
 
     # calculate employee projects factor (total job time/ projects summary time)
     pp_costs = pp_costs.merge(emp_table[['total']], how='left', sort=False,
