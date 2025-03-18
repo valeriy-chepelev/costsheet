@@ -15,8 +15,8 @@ def define_parser():
     """ Return CLI arguments parser
     """
     parser = argparse.ArgumentParser(description='Costsheet|Costsheet v.1.0 - Costs formatter by VCh.')
-    parser.add_argument('-t', '--template', metavar='TEMPLATE', default='t-13-template v4.docx',
-                        help='template docx filename (default "t-13-template v4.docx"')
+    parser.add_argument('-t', '--template', metavar='TEMPLATE', default='t-13-template v5.docx',
+                        help='template docx filename (default "t-13-template v5.docx"')
     parser.add_argument('-e', '--employees', metavar='EMPLOYEES', default='TestTable.xlsx',
                         help='employees monthly report xlsx filename (default "TestTable.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
@@ -200,7 +200,7 @@ def main():
     # build context: [projects [persons]]
 
     common_dict = {'rep_date': today.strftime("%d.%m.%Y"),
-                   'rep_period': rep_period.strftime("%m.%Y"),
+                   'rep_period': rep_period.strftime("%m месяц %Y год"),
                    'hod_spec': boss.loc[0, 1],
                    'hod_name': boss.loc[1, 1]}
     context = {'projects': list()}
