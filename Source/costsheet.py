@@ -165,19 +165,19 @@ def main():
                                                            f'pres{date}': presence})  # add to project
                     project_cost -= spent  # decrease project cost
                     job -= spent  # decrease day job
-                if job < 1:  # if day job over - take next day
+                if job < 1 and not project_cost < 1:  # if day job over, but need continue - take next day
                     date += 1
                     job = emp_data[f'h{date}']
                     presence = emp_data[f'pres{date}']
-                # calc half-totals and totals
-                part1 = [val for key, val in pers['projects'][project_name].items()
-                         if re.match('^h(?:1[0-5]|[1-9])$', key) and type(val) is int]
-                part2 = [val for key, val in pers['projects'][project_name].items()
-                         if re.match('^h(1[6-9]|2\\d|3[0-1])$', key) and type(val) is int]
-                pers['projects'][project_name].update({
-                    'hp1': sum(part1), 'dp1': len(part1),
-                    'hp2': sum(part2), 'dp2': len(part2),
-                    'sh': sum(part1) + sum(part2), 'sd': len(part1) + len(part2)})
+            # calc half-totals and totals
+            part1 = [val for key, val in pers['projects'][project_name].items()
+                     if re.match('^h(?:1[0-5]|[1-9])$', key) and type(val) is int]
+            part2 = [val for key, val in pers['projects'][project_name].items()
+                     if re.match('^h(1[6-9]|2\\d|3[0-1])$', key) and type(val) is int]
+            pers['projects'][project_name].update({
+                'hp1': sum(part1), 'dp1': len(part1),
+                'hp2': sum(part2), 'dp2': len(part2),
+                'sh': sum(part1) + sum(part2), 'sd': len(part1) + len(part2)})
         pers_list.append(pers)
 
     # fill empty days with default employee presence and zero times
