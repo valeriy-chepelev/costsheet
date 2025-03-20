@@ -201,3 +201,4 @@ if __name__ == '__main__':
     except Exception as e:
         print(f'{Fore.RED}Execution error:{e}{Style.RESET_ALL}')
         logging.exception('Common error')
+    input('Press "Enter" to leave.')

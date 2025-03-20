@@ -15,16 +15,17 @@ def define_parser():
     """ Return CLI arguments parser
     """
     parser = argparse.ArgumentParser(description='Costsheet|Costsheet v.1.0 - Costs formatter by VCh.')
+    parser.add_argument('table_filename', nargs='?',
+                        default='T13_default_table_name_magic_value',
+                        help='monthly employees report xlsx filename; default - "T13-yy-mm.xlsx"')
     parser.add_argument('-t', '--template', metavar='TEMPLATE', default='t-13-template v5.docx',
                         help='template docx filename (default "t-13-template v5.docx"')
-    parser.add_argument('-e', '--employees', metavar='EMPLOYEES', default='TestTable.xlsx',
-                        help='employees monthly report xlsx filename (default "TestTable.xlsx"')
     parser.add_argument('-d', '--date', metavar='REPORT_DATE',
                         type=lambda s: dt.datetime.strptime(s, '%y-%m'),
                         help='report period in "y-m" format (like "25-1" for january 2025); '
                              'default - previous month until 14th, current month since 15th')
     parser.add_argument('--debug', default=False, action='store_true',
-                        help='logging in debug mode (include tracker and issues info)')
+                        help='logging in debug mode')
     return parser
 
 
@@ -105,7 +106,11 @@ def main():
     print(boss.loc[0, 1], boss.loc[1, 1])
 
     # load and parse employee table
-    emp_table = pd.DataFrame(import_hr_table(args.employees))
+    if args.table_filename == 'T13_default_table_name_magic_value':
+        emp_filename = f'T13-{rep_period.strftime("%y-%m")}.xlsx'
+    else:
+        emp_filename = args.table_filename
+    emp_table = pd.DataFrame(import_hr_table(emp_filename))
     emp_table.set_index('name', inplace=True)
 
     # find and update persons names in persons/projects
@@ -226,3 +231,4 @@ if __name__ == '__main__':
     except Exception as e:
         print(f'{Fore.RED}Execution error:{e}{Style.RESET_ALL}')
         logging.exception('Common error')
+    input('Press "Enter" to leave.')
