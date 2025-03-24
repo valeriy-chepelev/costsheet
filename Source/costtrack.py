@@ -165,7 +165,7 @@ def main():
 
     # acquiring data from Tracker
 
-    print()
+    # print()
     report = pd.DataFrame(0,
                           index=persons['name'].values.tolist(),
                           columns=projects['name'].values.tolist())
@@ -183,7 +183,7 @@ def main():
                         s += spend(issue, person, start_date, final_date)
                     bar()
                 report.at[person['name'], project['name']] = s
-    print(report)
+    # print(report)  # disable due non-readable output format
 
     # store the report
 

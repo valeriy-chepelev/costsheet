@@ -30,14 +30,17 @@ def define_parser():
 
 
 def import_hr_table(filename):
-    in_table = pd.read_excel(filename, header=None, index_col=None,
-                             skiprows=9, skipfooter=5)
+    in_table = pd.read_excel(filename, header=None, index_col=None)
+    # print(in_table[2])
+    # input('Press Enter')
     persons = list()
     for index, row in in_table.iterrows():
         # detect person record by cyrillic in column 2
-        if re.match('[А-ЯЁа-яё \\-]+', str(row[2])):
-            name = ' '.join(str(row[2]).split() +
-                            str(in_table.iloc[int(index) + 1, 1]).split())  # split & join to remove extra spaces
+        if re.match('[А-ЯЁа-яё \\-]+', str(row[2])) and re.match('\\d+', str(row[1])):
+            words = str(row[2]).split() + \
+                    str(in_table.iloc[int(index) + 1, 1]).split() + \
+                    str(in_table.iloc[int(index) + 2, 1]).split()
+            name = ' '.join(words[:2])  # split & join to remove extra spaces
             # over-check name structure
             if not re.match('^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*(?:\\s[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)*){1,2}$',
                             name):
@@ -45,10 +48,11 @@ def import_hr_table(filename):
             emp_num = str(row[1]).strip()
             if not re.match('^\\d+$', emp_num):
                 raise ValueError(f'Employee "{name}" number not properly formatted: "{emp_num}"')
-            spec = str(in_table.iloc[int(index) + 2, 1]).strip()  # speciality
+            # spec = str(in_table.iloc[int(index) + 2, 1]).strip()  # speciality
+            spec = ''  # unable to get employee spec from actual data format
             status = in_table.iloc[int(index) + 1, 9:].tolist()  # slice of status letters
             times = row[9:].to_list()  # slice of day-times
-            times = [0 if math.isnan(t) else t for t in times]  # zero NaNs
+            times = [0 if math.isnan(t) else math.floor(t) for t in times]  # zero NaNs, drop all lees 1 hour
             # check days count is the same
             if len(times) != len(status):
                 raise ImportError(f'Timedata not match status for "{name}"')
@@ -57,10 +61,6 @@ def import_hr_table(filename):
             person.update({f'h{i}': t for i, t in enumerate(times, 1)})
             person.update({f'pres{i}': t for i, t in enumerate(status, 1)})
             persons.append(person)
-        elif not (type(row[2]) is float and math.isnan(row[2])):
-            # if ceil 2 contain something but not a name
-            logging.warning(msg := f'Cell [{index}, 2] contain strange data.')
-            print(f'{Fore.RED}WARNING: {msg}{Style.RESET_ALL}')
     return persons
 
 
@@ -86,12 +86,14 @@ def main():
 
     # Configure pandas to full output
 
-    pd.set_option('display.max_rows', 500)
+    pd.set_option('display.max_rows', 700)
     pd.set_option('display.max_columns', 500)
     pd.set_option('display.width', 1000)
 
     # define dates
     # in not defined in argument - two first week set to previous month, otherwise - to current month
+    if ''.join(s for s in os.getlogin() if s.isalnum()).lower()[:3] != 'sea':
+        raise ValueError('You are not logged.')
     today = dt.datetime.now(dt.timezone.utc)
     rep_period = today + dt.timedelta(days=-14) if args.date is None else args.date
     days_count = ((rep_period.replace(day=28) + dt.timedelta(days=4)).replace(day=1) + dt.timedelta(days=-1)).day
@@ -111,6 +113,7 @@ def main():
     else:
         emp_filename = args.table_filename
     emp_table = pd.DataFrame(import_hr_table(emp_filename))
+    # print(emp_table['name'])
     emp_table.set_index('name', inplace=True)
 
     # find and update persons names in persons/projects
@@ -143,8 +146,8 @@ def main():
                             f' corrected.')
             for project in list(pp_costs)[:-3]:
                 pp_costs.at[person, project] = math.floor(data['factor'] * data[project])
-    print('Costs data:')
-    print(pp_costs)
+    # print('Costs data:')  # disabled due unreadable format
+    # print(pp_costs)
 
     # build persons data structure: project at day = time (time=min(table day time, rest_project_time until rpt=0)
 
