@@ -114,7 +114,10 @@ def main():
     assert 'token' in config['DEFAULT']
     assert 'org' in config['DEFAULT']
     creds = config['DEFAULT']
-    client = TrackerClient(creds['token'], creds['org'])
+    if len(creds['org']) < 15:  # Yes, a magic number! cloud_org_id usually have length 20
+        client = TrackerClient(token=creds['token'], org_id=creds['org'])
+    else:
+        client = TrackerClient(token=creds['token'], cloud_org_id=creds['org'])
     if client.myself is None:
         raise Exception('Unable to connect Yandex Tracker.')
 
