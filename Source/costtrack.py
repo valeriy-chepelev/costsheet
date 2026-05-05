@@ -10,12 +10,46 @@ from data_access import issue_times, iso_hrs, linked_issues
 from colorama import init as colorama_init
 from colorama import Fore
 from colorama import Style
+import time
+import functools
+from yandex_tracker_client.exceptions import TrackerServerError
+
+
+def retry_on_exception(exception=Exception, retries=3, delay=1):
+    """
+    Декоратор для повторных попыток выполнения функции при возникновении указанного исключения.
+    ai-generated
+
+    Параметры:
+        exception : класс исключения (или кортеж классов), которые нужно перехватывать.
+        retries   : максимальное количество попыток (включая первый вызов).
+        delay     : пауза в секундах между попытками.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(1, retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exception as e:
+                    last_exception = e
+                    # print(f"Попытка {attempt}/{retries} завершилась ошибкой: {e}. "
+                    #       f"Повтор через {delay} сек...")
+                    time.sleep(delay)
+            # Все попытки исчерпаны, выбрасываем последнее пойманное исключение
+            raise last_exception
+
+        return wrapper
+
+    return decorator
 
 
 def define_parser():
     """ Return CLI arguments parser
     """
-    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.2 - Yandex Tracker costs crawler by VCh.',
+    parser = argparse.ArgumentParser(description='Costsheet|Costtrack v.1.3 - Yandex Tracker costs crawler by VCh.',
                                      epilog='Tracker connection settings in "connect.ini".')
     parser.add_argument('filename', nargs='?', default='ScanData.xlsx',
                         help='input excel projects and persons config; default - "ScanData.xlsx"')
@@ -29,6 +63,7 @@ def define_parser():
     return parser
 
 
+@retry_on_exception(TrackerServerError, 5, 3)
 def spend(issue, person, start, final):
     try:
         lc = int(person['move_cost'])
@@ -61,6 +96,7 @@ def users_jaccard(users):
     return min([len(set(user) & union) / len(set(user) | union) for user in users], default=1.0)
 
 
+@retry_on_exception(TrackerServerError, 5, 3)
 def get_issues(client, request):
     if len(request) == 0:
         return list()
@@ -74,6 +110,14 @@ def get_issues(client, request):
         return [client.issues[k] for k in keys]
     else:
         return list(client.issues.find(query=request))
+
+
+@retry_on_exception(TrackerServerError, 5, 3)
+def issue_in_date(issue, start, final):
+    return (dt.datetime.strptime(issue.updatedAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
+            >= start.date()) and (
+            dt.datetime.strptime(issue.createdAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
+            <= final.date())
 
 
 def main():
@@ -135,9 +179,12 @@ def main():
                              names=['name', 'request'])
     print()
     projects['size'] = 0
+    issues_list = dict()
     with alive_bar(len(projects), title='Projects', theme='classic') as bar:
         for index_prj, project in projects.iterrows():
-            projects.at[index_prj, 'size'] = len(get_issues(client, project['request']))
+            issues_list.update({project['name']: [i for i in get_issues(client, project['request'])
+                                if issue_in_date(i, start_date, final_date)]})
+            projects.at[index_prj, 'size'] = len(issues_list[project['name']])
             bar()
     print(projects)
 
@@ -175,15 +222,10 @@ def main():
     with alive_bar(int(len(persons) * sum(projects['size'].values)),
                    title='Costs', theme='classic') as bar:
         for _, project in projects.iterrows():
-            issues = get_issues(client, project['request'])
             for _, person in persons.iterrows():
                 s = 0
-                for issue in issues:
-                    if (dt.datetime.strptime(issue.updatedAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
-                        >= start_date.date()) and (
-                            dt.datetime.strptime(issue.createdAt, '%Y-%m-%dT%H:%M:%S.%f%z').date()
-                            <= final_date.date()):
-                        s += spend(issue, person, start_date, final_date)
+                for issue in issues_list[project['name']]:
+                    s += spend(issue, person, start_date, final_date)
                     bar()
                 report.at[person['name'], project['name']] = s
     # print(report)  # disable due non-readable output format
